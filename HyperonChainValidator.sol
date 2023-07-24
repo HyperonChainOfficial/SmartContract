@@ -142,10 +142,12 @@ contract HyperonChainValidator is owned {
         return true;
     }
 
-    function removeValidator(address _validatorAddress) external payable returns(bool){
+    function removeValidator(address _validatorAddress) external returns(bool){
         require(_validatorAddress != address(0), "0x Account Not Allowed");
         require(validator[_validatorAddress]._parentWallet == msg.sender, "Signer Must Be Parent Of Validator");
         require(validator[_validatorAddress].status == 1, "Validator Doesn't Exist");
+
+        payable(validator[_validatorAddress]._parentWallet).transfer(validator[_validatorAddress]._depositAmount);
 
         emit ValidatorRemoved(_validatorAddress, validator[_validatorAddress]._parentWallet, validator[_validatorAddress]._depositAmount);
 

@@ -63,13 +63,11 @@ contract HyperonChainValidator is owned {
     struct _validator
     {   
         uint _depositAmount;
-        address _parentWallet;
         uint status;
     }
 
     mapping (address => _validator) validator;
     mapping(address => bool) blacklistValidator;
-    mapping(address => bool) blacklistParent;
 
     uint activationAmount;
     uint fineAmount;
@@ -81,9 +79,9 @@ contract HyperonChainValidator is owned {
     event SetFineAmount(uint oldFineAmount, uint newFineAmount);
     event BlackListValidator(address _blacklistWalletAddress);
     event BlackListParent(address _blacklistWalletAddress);
-    event ValidatorAdded(address validatorAddress, address validatorParent, uint lockedAmount);
-    event ValidatorRemoved(address validatorAddress, address validatorParent, uint releasedAmount);
-    event ValidatorPunished(address validatorAddress, address validatorParent, uint releasedAmount, uint finedAmount);
+    event ValidatorAdded(address validatorAddress, uint lockedAmount);
+    event ValidatorRemoved(address validatorAddress, uint releasedAmount);
+    event ValidatorPunished(address validatorAddress, uint releasedAmount, uint finedAmount);
 
     function setPunishAccount(address _punishAccount) external  onlyOwner returns(bool){
         require(_punishAccount != address(0), "0x Account Not Allowed");
@@ -116,51 +114,37 @@ contract HyperonChainValidator is owned {
         return true;
     }
 
-    function blackListParent(address _blacklistWallet, bool status) external onlySigner returns(bool){
-        require(_blacklistWallet != address(0), "0x Account Not Allowed");
-        require(blacklistParent[_blacklistWallet] != status, "BlackList Status Is Already Set For Parent");
-        blacklistParent[_blacklistWallet] = status;
-        emit BlackListParent(_blacklistWallet);
-        return true;
-    }
-
-    function addValidator(address _validatorAddress) external payable returns(bool){
-        require(_validatorAddress != address(0), "0x Account Not Allowed");
-        require(blacklistParent[msg.sender] != true, "Parent Wallet Is BlackListed");
-        require(blacklistValidator[_validatorAddress] != true, "Validator Wallet Is BlackListed");
-        require(validator[_validatorAddress]._parentWallet == address(0), "0x Account Not Allowed");
-        require(validator[_validatorAddress]._depositAmount == 0, "Validator Is Already Active");
-        require(validator[_validatorAddress].status == 0, "Validator Status Is Already Active");
+    function addValidator() external payable returns(bool){
+        require(msg.sender != address(0), "0x Account Not Allowed");
+        require(blacklistValidator[msg.sender] != true, "Validator Wallet Is BlackListed");
+        require(validator[msg.sender]._depositAmount == 0, "Validator Is Already Active");
+        require(validator[msg.sender].status == 0, "Validator Status Is Already Active");
         require(msg.value == activationAmount, "Activation Amount Is Not Matching");
 
-        validator[_validatorAddress]._depositAmount = msg.value;
-        validator[_validatorAddress]._parentWallet = msg.sender;
-        validator[_validatorAddress].status = 1;
+        validator[msg.sender]._depositAmount = msg.value;
+        validator[msg.sender].status = 1;
 
-        emit ValidatorAdded(_validatorAddress, validator[_validatorAddress]._parentWallet, validator[_validatorAddress]._depositAmount);
+        emit ValidatorAdded(msg.sender, validator[msg.sender]._depositAmount);
 
         return true;
     }
 
-    function removeValidator(address _validatorAddress) external returns(bool){
-        require(_validatorAddress != address(0), "0x Account Not Allowed");
-        require(validator[_validatorAddress]._parentWallet == msg.sender, "Signer Must Be Parent Of Validator");
-        require(validator[_validatorAddress].status == 1, "Validator Doesn't Exist");
+    function removeValidator() external returns(bool){
+        require(msg.sender != address(0), "0x Account Not Allowed");
+        require(validator[msg.sender].status == 1, "Validator Doesn't Exist");
 
-        payable(validator[_validatorAddress]._parentWallet).transfer(validator[_validatorAddress]._depositAmount);
+        payable(msg.sender).transfer(validator[msg.sender]._depositAmount);
 
-        emit ValidatorRemoved(_validatorAddress, validator[_validatorAddress]._parentWallet, validator[_validatorAddress]._depositAmount);
+        emit ValidatorRemoved(msg.sender, validator[msg.sender]._depositAmount);
 
-        validator[_validatorAddress]._depositAmount = 0;
-        validator[_validatorAddress]._parentWallet = address(0);
-        validator[_validatorAddress].status = 0;
+        validator[msg.sender]._depositAmount = 0;
+        validator[msg.sender].status = 0;
 
         return true;
     }
 
     function punishValidator(address _validatorAddress) external onlySigner returns(bool){
         require(_validatorAddress != address(0), "0x Account Not Allowed");
-        require(validator[_validatorAddress]._parentWallet != address(0), "0x Account Not Allowed");
         require(validator[_validatorAddress].status == 1, "Validator Doesn't Exist");
 
         uint _finedAmount =0;
@@ -168,13 +152,12 @@ contract HyperonChainValidator is owned {
             _finedAmount = (validator[_validatorAddress]._depositAmount * fineAmount)/100;
         }
         
-        payable(validator[_validatorAddress]._parentWallet).transfer((validator[_validatorAddress]._depositAmount - _finedAmount));
+        payable(_validatorAddress).transfer((validator[_validatorAddress]._depositAmount - _finedAmount));
         payable(punishAccount).transfer(_finedAmount);
 
-        emit ValidatorPunished(_validatorAddress, validator[_validatorAddress]._parentWallet, (validator[_validatorAddress]._depositAmount-_finedAmount),_finedAmount);
+        emit ValidatorPunished(_validatorAddress, (validator[_validatorAddress]._depositAmount-_finedAmount), _finedAmount);
 
         validator[_validatorAddress]._depositAmount = 0;
-        validator[_validatorAddress]._parentWallet = address(0);
         validator[_validatorAddress].status = 0;
 
         return true;
